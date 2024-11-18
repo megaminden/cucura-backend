@@ -1,5 +1,9 @@
+pub mod business;
+pub mod message;
+pub mod notification;
+pub mod payment;
 pub mod profile;
 pub mod rating;
 pub mod review;
+pub mod training;
 pub mod user;
-// Compare this snippet from src/routes/user_routes.rs:

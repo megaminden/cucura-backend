@@ -6,7 +6,10 @@ use mongodb::{
     options::{ClientOptions, ServerApi, ServerApiVersion},
     Client,
 };
-use routes::{profile_routes, rating_routes, review_routes, user_routes};
+use routes::{
+    business_routes, message_routes, payment_routes, profile_routes, rating_routes, review_routes,
+    training_routes, user_routes,
+};
 
 use std::env;
 
@@ -37,7 +40,11 @@ async fn main() -> std::io::Result<()> {
             .configure(user_routes::user_routes)
             .configure(rating_routes::rating_routes)
             .configure(profile_routes::profile_routes)
-            .configure(routes::review_routes::review_routes)
+            .configure(review_routes::review_routes)
+            .configure(training_routes::training_routes)
+            .configure(business_routes::business_routes)
+            .configure(payment_routes::payment_routes)
+            .configure(message_routes::message_routes)
             .route("/", web::get().to(greet))
     })
     .bind(("0.0.0.0", 5001))?
