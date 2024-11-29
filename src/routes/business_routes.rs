@@ -3,7 +3,7 @@ use actix_web::{web, HttpResponse, Responder};
 use futures::StreamExt;
 use models::business::Business;
 use mongodb::{
-    bson::{doc, oid::ObjectId},
+    bson::{self, doc, oid::ObjectId},
     Client, Collection,
 };
 
@@ -26,25 +26,14 @@ pub async fn register_business(
     business: web::Json<Business>,
 ) -> impl Responder {
     let collection = client.database("cucura-ccdb").collection("businesses");
-    let new_business = Business {
-        id: business.id.clone(),
-        user_id: business.user_id.clone(),
-        name: business.name.clone(),
-        description: business.description.clone(),
-        logo: business.logo.clone(),
-        pictures: business.pictures.clone(),
-        founder: business.founder.clone(),
-        industry: business.industry.clone(),
-        phone: business.phone.clone(),
-        address: business.address.clone(),
-        city: business.city.clone(),
-        region: business.region.clone(),
-        country: business.country.clone(),
-        website: business.website.clone(),
-        contact_email: business.contact_email.clone(),
-        created_at: business.created_at.clone(),
-        updated_at: business.updated_at.clone(),
-    };
+    let new_business = business.into_inner();
+    //find if business already exists
+    let filter = doc! { "name": &new_business.name };
+    let business_exists = collection.find_one(filter.clone()).await.unwrap();
+    match business_exists {
+        Some(_) => return HttpResponse::Ok().json("Error 10001 : Business already exists"),
+        None => (),
+    }
 
     let insert_result = collection.insert_one(new_business).await;
 
@@ -62,27 +51,18 @@ pub async fn update_business(
     business: web::Json<Business>,
 ) -> impl Responder {
     let collection: Collection<Business> = client.database("cucura-ccdb").collection("businesses");
-    let filter = doc! { "_id": &business.id };
-    let update = doc! { "$set": {
-        "user_id": &business.user_id,
-        "name": &business.name,
-        "description": &business.description,
-        "logo": &business.logo,
-        "pictures": &business.pictures,
-        "founder": &business.founder,
-        "industry": &business.industry,
-        "phone": &business.phone,
-        "address": &business.address,
-        "city": &business.city,
-        "region": &business.region,
-        "country": &business.country,
-        "website": &business.website,
-        "contact_email": &business.contact_email,
-        "created_at": &business.created_at,
-        "updated_at": &business.updated_at
-    }};
+    let new_business = business.into_inner();
+    //check if business already exists
+    let filter = doc! { "name": &new_business.name };
+    let business_exists = collection.find_one(filter.clone()).await.unwrap();
+    match business_exists {
+        Some(_) => (),
+        None => return HttpResponse::Ok().json("Error 10001 : Business does not exist"),
+    }
 
-    let update_result = collection.update_one(filter, update).await;
+    let filter = doc! { "business_id":  bson::to_document(&new_business.business_id).unwrap() };
+    let update_doc = doc! { "$set": bson::to_document(&new_business).unwrap() };
+    let update_result = collection.update_one(filter, update_doc).await;
 
     match update_result {
         Ok(_) => HttpResponse::Ok().json("business updated successfully"),
@@ -95,8 +75,8 @@ pub async fn update_business(
 
 pub async fn delete_business(client: web::Data<Client>, path: web::Path<String>) -> impl Responder {
     let collection: Collection<Business> = client.database("cucura-ccdb").collection("businesses");
-    let id = path.into_inner();
-    let filter = doc! { "_id": ObjectId::parse_str(&id).unwrap() };
+    let business_id = path.into_inner();
+    let filter = doc! { "business_id": &business_id};
 
     let delete_result = collection.delete_one(filter).await;
 
@@ -111,8 +91,8 @@ pub async fn delete_business(client: web::Data<Client>, path: web::Path<String>)
 
 pub async fn find_business(client: web::Data<Client>, path: web::Path<String>) -> impl Responder {
     let collection: Collection<Business> = client.database("cucura-ccdb").collection("businesses");
-    let id = path.into_inner();
-    let filter = doc! { "_id": ObjectId::parse_str(&id).unwrap() };
+    let business_id = path.into_inner();
+    let filter = doc! { "business_id":business_id };
 
     match collection.find_one(filter).await {
         Ok(Some(business)) => HttpResponse::Ok().json(business),
@@ -148,7 +128,17 @@ pub async fn find_businesses_by_user_id(
 ) -> impl Responder {
     let collection: Collection<Business> = client.database("cucura-ccdb").collection("businesses");
     let user_id = path.into_inner();
-    let filter = doc! { "user_id": &user_id };
+    //check if user exists
+    let collection_user: Collection<models::user::User> =
+        client.database("cucura-ccdb").collection("users");
+    let filter_user = doc! {"user_id": &user_id};
+    let user_exists = collection_user.find_one(filter_user.clone()).await.unwrap();
+    match user_exists {
+        Some(_) => (),
+        None => return HttpResponse::Ok().json("Error 10001 : User does not exist"),
+    }
+
+    let filter = doc! { "user_ids": {"$elemMatch": &user_id} };
 
     let mut cursor = collection.find(filter).await.unwrap();
 

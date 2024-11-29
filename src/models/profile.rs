@@ -1,50 +1,57 @@
-use mongodb::bson::oid::ObjectId;
+use chrono::{NaiveDateTime, Utc};
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Profile {
-    #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
-    pub id: Option<ObjectId>,
+    pub profile_id: Uuid,
+    pub user_id: Uuid,
     pub username: String,
     pub email: String,
     pub bio: Option<String>,
     pub profile_type: Option<String>,
     pub business: Option<String>,
-    pub interests: Option<String>,
+    pub interests: Option<Vec<String>>,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
 }
 
 impl Profile {
-    pub fn new(username: String, email: String) -> Profile {
+    pub fn new(user_id: Uuid, email: String, username: String) -> Profile {
         Profile {
-            id: None,
+            profile_id: Uuid::new_v4(),
+            user_id,
             username,
             email,
             bio: None,
             profile_type: None,
             business: None,
             interests: None,
+            created_at: Utc::now().naive_utc(),
+            updated_at: Utc::now().naive_utc(),
         }
     }
 
-    //     create new with complete constructor
-    #[allow(dead_code)]
-    pub fn default(
-        id: Option<ObjectId>,
-        username: String,
+    pub fn new_with_details(
+        user_id: Uuid,
         email: String,
-        bio: Option<String>,
-        profile_type: Option<String>,
-        business: Option<String>,
-        interests: Option<String>,
+        username: String,
+        bio: String,
+        profile_type: String,
+        business: String,
+        interests: Vec<String>,
     ) -> Profile {
         Profile {
-            id,
+            profile_id: Uuid::new_v4(),
+            user_id,
             username,
             email,
-            bio,
-            profile_type,
-            business,
-            interests,
+            bio: Some(bio),
+            profile_type: Some(profile_type),
+            business: Some(business),
+            interests: Some(interests),
+            created_at: Utc::now().naive_utc(),
+            updated_at: Utc::now().naive_utc(),
         }
     }
 }

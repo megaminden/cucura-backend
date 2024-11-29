@@ -35,13 +35,7 @@ pub fn message_routes(cfg: &mut web::ServiceConfig) {
 
 async fn send_message(client: web::Data<Client>, message: web::Json<Message>) -> impl Responder {
     let collection = client.database("cucura-ccdb").collection("messages");
-    let new_message = Message {
-        id: message.id.clone(),
-        sender: message.sender.clone(),
-        receiver: message.receiver.clone(),
-        content: message.content.clone(),
-        timestamp: message.timestamp.clone(),
-    };
+    let new_message = message.into_inner();
 
     let insert_result = collection.insert_one(new_message).await;
 
@@ -60,7 +54,7 @@ pub async fn find_messages_between_parties(
 ) -> impl Responder {
     let collection: Collection<Message> = client.database("cucura-ccdb").collection("messages");
     let (sender_id, receiver_id) = path.into_inner();
-    let filter = doc! { "sender": { "$in": [&sender_id, &receiver_id] },"receiver": { "$in": [&sender_id, &receiver_id] }};
+    let filter = doc! { "sender_id": { "$in": [&sender_id, &receiver_id] },"receiver_id": { "$in": [&sender_id, &receiver_id] }};
 
     let mut cursor = collection.find(filter).await.unwrap();
 
@@ -80,7 +74,7 @@ pub async fn find_message_by_sender(
 ) -> impl Responder {
     let collection: Collection<Message> = client.database("cucura-ccdb").collection("messages");
     let sender_id = path.into_inner();
-    let filter = doc! { "sender": sender_id};
+    let filter = doc! { "sender_id": sender_id};
 
     match collection.find_one(filter).await {
         Ok(Some(message)) => HttpResponse::Ok().json(message),
@@ -98,7 +92,7 @@ pub async fn find_message_by_receiver(
 ) -> impl Responder {
     let collection: Collection<Message> = client.database("cucura-ccdb").collection("messages");
     let receiver_id = path.into_inner();
-    let filter = doc! { "receiver": receiver_id};
+    let filter = doc! { "receiver_id": receiver_id};
 
     match collection.find_one(filter).await {
         Ok(Some(message)) => HttpResponse::Ok().json(message),
@@ -113,7 +107,7 @@ pub async fn find_message_by_receiver(
 pub async fn delete_message(client: web::Data<Client>, path: web::Path<String>) -> impl Responder {
     let collection: Collection<Message> = client.database("cucura-ccdb").collection("messages");
     let sender_id = path.into_inner();
-    let filter = doc! { "sender": sender_id };
+    let filter = doc! { "sender_id": sender_id };
 
     let delete_result = collection.delete_one(filter).await;
 
@@ -148,13 +142,7 @@ pub async fn create_notification(
     notification: web::Json<Notification>,
 ) -> impl Responder {
     let collection = client.database("cucura-ccdb").collection("notifications");
-    let new_notification = Notification {
-        id: notification.id.clone(),
-        user_id: notification.user_id.clone(),
-        message: notification.message.clone(),
-        confirmed: notification.confirmed,
-        timestamp: notification.timestamp.clone(),
-    };
+    let new_notification = notification.into_inner();
 
     let insert_result = collection.insert_one(new_notification).await;
 

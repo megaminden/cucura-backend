@@ -1,11 +1,11 @@
-use mongodb::bson::oid::ObjectId;
+use chrono::{NaiveDateTime, Utc};
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Business {
-    #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
-    pub id: Option<ObjectId>,
-    pub user_id: String, // This is the user_id of the user who created the business
+    pub business_id: Uuid,
+    pub user_ids: Option<Vec<Uuid>>, // This is the user_id of the user who created the business
     pub name: String,
     pub description: String,
     pub logo: Option<String>,
@@ -21,4 +21,36 @@ pub struct Business {
     pub contact_email: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+}
+
+impl Business {
+    pub fn new(
+        user_ids: Option<Vec<Uuid>>,
+        name: String,
+        description: String,
+        founder: String,
+        industry: String,
+        phone: String,
+        country: String,
+    ) -> Business {
+        Business {
+            business_id: Uuid::new_v4(),
+            user_ids,
+            name,
+            description,
+            logo: None,
+            pictures: None,
+            founder,
+            industry,
+            phone,
+            address: None,
+            city: None,
+            region: None,
+            country,
+            website: None,
+            contact_email: None,
+            created_at: Utc::now().to_string(),
+            updated_at: Utc::now().to_string(),
+        }
+    }
 }

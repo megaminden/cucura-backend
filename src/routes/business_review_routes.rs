@@ -1,11 +1,10 @@
-// routes/review_routes.rs
 use actix_web::{web, HttpResponse, Responder};
 use futures::StreamExt;
-use models::review::Review;
+use mongodb::bson;
 use mongodb::bson::oid::ObjectId;
 use mongodb::{bson::doc, Client, Collection};
 
-use crate::models;
+use crate::models::business_review::BusinessReview;
 
 pub fn review_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(web::resource("/reviews/add").route(web::post().to(add_review)))
@@ -15,16 +14,12 @@ pub fn review_routes(cfg: &mut web::ServiceConfig) {
         .service(web::resource("/reviews/{id}").route(web::get().to(find_review)));
 }
 
-pub async fn add_review(client: web::Data<Client>, review: web::Json<Review>) -> impl Responder {
+pub async fn add_review(
+    client: web::Data<Client>,
+    review: web::Json<BusinessReview>,
+) -> impl Responder {
     let collection = client.database("cucura-ccdb").collection("reviews");
-    let new_review = Review {
-        user_id: review.user_id.clone(),
-        product_id: review.product_id.clone(),
-        rating: review.rating,
-        comment: review.comment.clone(),
-        id: None,
-    };
-
+    let new_review = review.into_inner();
     let insert_result = collection.insert_one(new_review).await;
 
     match insert_result {
@@ -36,12 +31,22 @@ pub async fn add_review(client: web::Data<Client>, review: web::Json<Review>) ->
     }
 }
 
-pub async fn update_review(client: web::Data<Client>, review: web::Json<Review>) -> impl Responder {
-    let collection: Collection<Review> = client.database("cucura-ccdb").collection("reviews");
-    let filter = doc! { "_id": &review.id };
-    let update = doc! { "$set": { "user_id": &review.user_id, "product_id": &review.product_id, "rating": &review.rating, "comment": &review.comment } };
-
-    let update_result = collection.update_one(filter, update).await;
+pub async fn update_review(
+    client: web::Data<Client>,
+    business_review: web::Json<BusinessReview>,
+) -> impl Responder {
+    let collection: Collection<BusinessReview> =
+        client.database("cucura-ccdb").collection("reviews");
+    let new_business_review = business_review.into_inner();
+    //check if review already exists
+    let business_review = bson::to_document(&new_business_review).unwrap();
+    let filter = doc! { "business_review": &business_review };
+    let review_exists = collection.find_one(filter.clone()).await.unwrap();
+    match review_exists {
+        Some(_) => (),
+        None => return HttpResponse::Ok().json("Error 10001 : Review does not exist"),
+    }
+    let update_result = collection.update_one(filter, business_review).await;
 
     match update_result {
         Ok(_) => HttpResponse::Ok().json("review updated successfully"),
@@ -53,9 +58,10 @@ pub async fn update_review(client: web::Data<Client>, review: web::Json<Review>)
 }
 
 pub async fn delete_review(client: web::Data<Client>, path: web::Path<String>) -> impl Responder {
-    let collection: Collection<Review> = client.database("cucura-ccdb").collection("reviews");
-    let id = path.into_inner();
-    let filter = doc! { "_id": ObjectId::parse_str(&id).unwrap() };
+    let collection: Collection<BusinessReview> =
+        client.database("cucura-ccdb").collection("reviews");
+    let business_review_id = path.into_inner();
+    let filter = doc! { "business_review_id": business_review_id };
 
     let delete_result = collection.delete_one(filter).await;
 
@@ -69,9 +75,10 @@ pub async fn delete_review(client: web::Data<Client>, path: web::Path<String>) -
 }
 
 pub async fn find_review(client: web::Data<Client>, path: web::Path<String>) -> impl Responder {
-    let collection: Collection<Review> = client.database("cucura-ccdb").collection("reviews");
-    let id = path.into_inner();
-    let filter = doc! { "_id": ObjectId::parse_str(&id).unwrap() };
+    let collection: Collection<BusinessReview> =
+        client.database("cucura-ccdb").collection("reviews");
+    let business_review_id = path.into_inner();
+    let filter = doc! { "business_review_id": business_review_id };
 
     match collection.find_one(filter).await {
         Ok(Some(review)) => HttpResponse::Ok().json(review),
@@ -84,7 +91,8 @@ pub async fn find_review(client: web::Data<Client>, path: web::Path<String>) -> 
 }
 
 pub async fn find_all_reviews(client: web::Data<Client>) -> impl Responder {
-    let collection: Collection<Review> = client.database("cucura-ccdb").collection("reviews");
+    let collection: Collection<BusinessReview> =
+        client.database("cucura-ccdb").collection("reviews");
     let filter = doc! {};
 
     let mut cursor = collection.find(filter).await.unwrap();

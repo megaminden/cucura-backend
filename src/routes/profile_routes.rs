@@ -20,15 +20,13 @@ pub async fn register_profile(
 ) -> impl Responder {
     println!();
     let collection = client.database("cucura-ccdb").collection("profiles");
-    let new_profile = Profile {
-        id: profile.id.clone(),
-        username: profile.username.clone(),
-        email: profile.email.clone(),
-        bio: profile.bio.clone(), // Note: Password should be hashed before storing
-        business: profile.business.clone(),
-        interests: profile.interests.clone(),
-        profile_type: profile.profile_type.clone(),
-    };
+    let new_profile = profile.into_inner();
+    let filter = doc! { "email": &new_profile.email };
+    let profile_exists = collection.find_one(filter.clone()).await.unwrap();
+    match profile_exists {
+        Some(_) => return HttpResponse::Ok().json("Error 10001 : Profile already exists"),
+        None => (),
+    }
 
     let insert_result = collection.insert_one(new_profile).await;
 
@@ -46,8 +44,10 @@ pub async fn update_profile(
     profile: web::Json<Profile>,
 ) -> impl Responder {
     let collection: Collection<Profile> = client.database("cucura-ccdb").collection("profiles");
-    let filter = doc! { "email": &profile.email };
-    let update = doc! { "$set": { "username": &profile.username, "bio": &profile.bio } }; // Note: Password should be hashed before storing
+    let new_profile = profile.into_inner();
+    let filter = doc! { "email": &new_profile.email };
+
+    let update = doc! { "$set": { "username": &new_profile.username, "bio": &new_profile.bio } }; // Note: Password should be hashed before storing
 
     let update_result = collection.update_one(filter, update).await;
 
@@ -62,13 +62,13 @@ pub async fn update_profile(
 
 pub async fn delete_profile(client: web::Data<Client>, path: web::Path<String>) -> impl Responder {
     let collection: Collection<Profile> = client.database("cucura-ccdb").collection("profiles");
-    let email = path.into_inner();
-    let filter = doc! { "email": &email };
+    let username = path.into_inner();
+    let filter = doc! { "username": &username };
 
     let delete_result = collection.delete_one(filter).await;
 
     match delete_result {
-        Ok(_) => HttpResponse::Ok().json("profile deleted successfully"),
+        Ok(_) => HttpResponse::Ok().json("Profile deleted successfully"),
         Err(e) => {
             eprintln!("Failed to delete document: {}", e);
             HttpResponse::InternalServerError().json("Failed to delete profile")
@@ -77,12 +77,12 @@ pub async fn delete_profile(client: web::Data<Client>, path: web::Path<String>) 
 }
 pub async fn find_profile(client: web::Data<Client>, path: web::Path<String>) -> impl Responder {
     let collection: Collection<Profile> = client.database("cucura-ccdb").collection("profiles");
-    let email = path.into_inner();
-    let filter = doc! { "email": &email };
+    let username = path.into_inner();
+    let filter = doc! { "username": &username };
 
     match collection.find_one(filter).await {
         Ok(Some(profile)) => HttpResponse::Ok().json(profile),
-        Ok(None) => HttpResponse::NotFound().json("profile not found"),
+        Ok(None) => HttpResponse::NotFound().json("Profile not found"),
         Err(e) => {
             eprintln!("Failed to find document: {}", e);
             HttpResponse::InternalServerError().json("Failed to find profile")

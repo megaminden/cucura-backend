@@ -1,9 +1,10 @@
 pub mod business;
+pub mod business_review;
 pub mod message;
 pub mod notification;
 pub mod payment;
+pub mod payment_type;
 pub mod profile;
 pub mod rating;
-pub mod review;
 pub mod training;
 pub mod user;

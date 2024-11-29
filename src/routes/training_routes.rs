@@ -3,7 +3,7 @@ use actix_web::{web, HttpResponse, Responder};
 use futures::StreamExt;
 use models::training::Training;
 use mongodb::{
-    bson::{doc, oid::ObjectId},
+    bson::{self, doc, oid::ObjectId},
     Client, Collection,
 };
 
@@ -22,14 +22,7 @@ pub async fn add_training(
     training: web::Json<Training>,
 ) -> impl Responder {
     let collection = client.database("cucura-ccdb").collection("trainings");
-    let new_training = Training {
-        id: None,
-        title: training.title.clone(),
-        description: training.description.clone(),
-        date: training.date.clone(),
-        duration: training.duration.clone(),
-        trainer: training.trainer.clone(),
-    };
+    let new_training = training.into_inner();
 
     let insert_result = collection.insert_one(new_training).await;
 
@@ -47,10 +40,17 @@ pub async fn update_training(
     training: web::Json<Training>,
 ) -> impl Responder {
     let collection: Collection<Training> = client.database("cucura-ccdb").collection("trainings");
-    let filter = doc! { "_id": &training.id };
-    let update = doc! { "$set": { "title": &training.title, "description": &training.description, "date": &training.date, "duration": &training.duration, "trainer": &training.trainer } };
+    let training = training.into_inner();
+    let filter_exist = doc! { "training_id": bson::to_document(&training.training_id).unwrap() };
 
-    let update_result = collection.update_one(filter, update).await;
+    let training_exists = collection.find_one(filter_exist.clone()).await.unwrap();
+    match training_exists {
+        Some(_) => (),
+        None => return HttpResponse::Ok().json("Error 10001 : Training does not exist"),
+    }
+    let update = doc! { "$set": bson::to_document(&training).unwrap() };
+
+    let update_result = collection.update_one(filter_exist, update).await;
 
     match update_result {
         Ok(_) => HttpResponse::Ok().json("training updated successfully"),

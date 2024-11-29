@@ -1,4 +1,5 @@
 use actix_web::{web, HttpResponse, Responder};
+use bcrypt::{hash, verify, DEFAULT_COST};
 use futures::StreamExt;
 use models::user::User;
 use mongodb::{bson::doc, Client, Collection};
@@ -8,7 +9,7 @@ use crate::models;
 pub fn user_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(web::resource("/users/register").route(web::post().to(register_user)))
         .service(web::resource("/users/update").route(web::put().to(update_user)))
-        .service(web::resource("/users/delete/{username}").route(web::delete().to(delete_user)))
+        .service(web::resource("/users/delete/{email}").route(web::delete().to(delete_user)))
         .service(web::resource("/users").route(web::get().to(find_all_users)))
         .service(web::resource("/users/{username}").route(web::get().to(find_user)))
         .service(web::resource("/users/find/{username}").route(web::get().to(find_user)));
@@ -17,13 +18,8 @@ pub fn user_routes(cfg: &mut web::ServiceConfig) {
 pub async fn register_user(client: web::Data<Client>, user: web::Json<User>) -> impl Responder {
     println!();
     let collection: Collection<User> = client.database("cucura-ccdb").collection("users");
-    let new_user = User {
-        id: user.id.clone(),
-        username: user.username.clone(),
-        email: user.email.clone(),
-        password: user.password.clone(), // Note: Password should be hashed before storing
-    };
-
+    let hashed_password = hash(&user.password.clone(), DEFAULT_COST).unwrap();
+    let new_user = user.into_inner();
     //check if user already exists
     let filter = doc! { "username": &new_user.username };
     let user_exists = collection.find_one(filter.clone()).await.unwrap();
@@ -36,12 +32,14 @@ pub async fn register_user(client: web::Data<Client>, user: web::Json<User>) -> 
 
     match insert_result {
         Ok(_) => {
+            let user_exists = collection.find_one(filter.clone()).await.unwrap().unwrap();
             client
                 .database("cucura-ccdb")
                 .collection("profiles")
                 .insert_one(models::profile::Profile::new(
-                    new_user.username.clone(),
-                    new_user.email.clone(),
+                    user_exists.user_id.clone(),
+                    user_exists.email.clone(),
+                    user_exists.username.clone(), // Add the third argument here
                 ))
                 .await
                 .unwrap();
@@ -72,8 +70,8 @@ pub async fn update_user(client: web::Data<Client>, user: web::Json<User>) -> im
 
 pub async fn delete_user(client: web::Data<Client>, path: web::Path<String>) -> impl Responder {
     let collection: Collection<User> = client.database("cucura-ccdb").collection("users");
-    let username = path.into_inner();
-    let filter = doc! { "username": &username };
+    let email = path.into_inner();
+    let filter = doc! { "email": &email };
 
     let delete_result = collection.delete_one(filter).await;
 

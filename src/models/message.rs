@@ -1,12 +1,25 @@
-use mongodb::bson::oid::ObjectId;
+use chrono::{NaiveDateTime, Utc};
 use serde::{Deserialize, Serialize};
-
+use uuid::Uuid;
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Message {
-    #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
-    pub id: Option<ObjectId>,
-    pub sender: String,
-    pub receiver: String,
+    pub message_id: Uuid,
+    pub sender: Uuid,
+    pub receiver: Uuid,
     pub content: String,
-    pub timestamp: String,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+impl Message {
+    pub fn new(sender: Uuid, receiver: Uuid, content: String) -> Message {
+        Message {
+            message_id: Uuid::new_v4(),
+            sender,
+            receiver,
+            content,
+            created_at: chrono::Utc::now().naive_utc(),
+            updated_at: chrono::Utc::now().naive_utc(),
+        }
+    }
 }

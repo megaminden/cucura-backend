@@ -1,5 +1,6 @@
 mod models;
 mod routes;
+use actix_cors::Cors;
 use actix_web::{web, App, HttpResponse, HttpServer, Responder};
 use dotenv::dotenv;
 use mongodb::{
@@ -7,8 +8,8 @@ use mongodb::{
     Client,
 };
 use routes::{
-    business_routes, message_routes, payment_routes, profile_routes, rating_routes, review_routes,
-    training_routes, user_routes,
+    auth_routes, business_review_routes, business_routes, message_routes, payment_routes,
+    profile_routes, training_routes, user_routes,
 };
 
 use std::env;
@@ -35,16 +36,23 @@ async fn main() -> std::io::Result<()> {
     println!("Starting web server...");
 
     HttpServer::new(move || {
+        let cors = Cors::default()
+            .allow_any_origin()
+            .allow_any_method()
+            .allow_any_header()
+            .max_age(3600);
+
         App::new()
             .app_data(web::Data::new(client.clone()))
+            .wrap(cors)
             .configure(user_routes::user_routes)
-            .configure(rating_routes::rating_routes)
             .configure(profile_routes::profile_routes)
-            .configure(review_routes::review_routes)
+            .configure(business_review_routes::review_routes)
             .configure(training_routes::training_routes)
             .configure(business_routes::business_routes)
             .configure(payment_routes::payment_routes)
             .configure(message_routes::message_routes)
+            .configure(auth_routes::auth_routes)
             .route("/", web::get().to(greet))
     })
     .bind(("0.0.0.0", 5001))?

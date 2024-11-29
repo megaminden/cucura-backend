@@ -3,7 +3,10 @@ use actix_web::{web, HttpResponse, Responder};
 use futures::StreamExt;
 use models::payment::Payment;
 use mongodb::bson::oid::ObjectId;
-use mongodb::{bson::doc, Client, Collection};
+use mongodb::{
+    bson::{self, doc},
+    Client, Collection,
+};
 
 use crate::models;
 
@@ -25,18 +28,7 @@ pub fn payment_routes(cfg: &mut web::ServiceConfig) {
 
 pub async fn add_payment(client: web::Data<Client>, payment: web::Json<Payment>) -> impl Responder {
     let collection = client.database("cucura-ccdb").collection("payments");
-    let new_payment = Payment {
-        id: None,
-        purchaser_id: payment.purchaser_id.clone(),
-        seller_id: payment.seller_id.clone(),
-        payment_type: payment.payment_type.clone(),
-        description: payment.description.clone(),
-        amount: payment.amount,
-        currency: payment.currency.clone(),
-        status: payment.status.clone(),
-        created_at: payment.created_at.clone(),
-        updated_at: payment.updated_at.clone(),
-    };
+    let new_payment = payment.into_inner();
 
     let insert_result = collection.insert_one(new_payment).await;
 
@@ -54,20 +46,16 @@ pub async fn update_payment(
     payment: web::Json<Payment>,
 ) -> impl Responder {
     let collection: Collection<Payment> = client.database("cucura-ccdb").collection("payments");
-    let filter = doc! { "_id": &payment.id };
-    let update = doc! { "$set": {
-        "purchaser_id": &payment.purchaser_id,
-        "seller_id": &payment.seller_id,
-        "payment_type": &payment.payment_type,
-        "description": &payment.description,
-        "amount": &payment.amount,
-        "currency": &payment.currency,
-        "status": &payment.status,
-        "created_at": &payment.created_at,
-        "updated_at": &payment.updated_at
-    }};
-
-    let update_result = collection.update_one(filter, update).await;
+    let payment_for_update = payment.into_inner();
+    //check if payment already exists
+    let filter = doc! {"payment_id": payment_for_update.payment_id.to_string() };
+    let payment_exists = collection.find_one(filter.clone()).await.unwrap();
+    match payment_exists {
+        Some(_) => (),
+        None => return HttpResponse::Ok().json("Error 10001 : Payment does not exist"),
+    }
+    let update_doc = doc! { "$set": bson::to_document(&payment_for_update).unwrap() };
+    let update_result = collection.update_one(filter, update_doc).await;
 
     match update_result {
         Ok(_) => HttpResponse::Ok().json("payment updated successfully"),
@@ -80,13 +68,13 @@ pub async fn update_payment(
 
 pub async fn delete_payment(client: web::Data<Client>, path: web::Path<String>) -> impl Responder {
     let collection: Collection<Payment> = client.database("cucura-ccdb").collection("payments");
-    let id = path.into_inner();
-    let filter = doc! { "_id": ObjectId::parse_str(&id).unwrap() };
+    let payment_id = path.into_inner();
+    let filter = doc! { "payment_id": &payment_id};
 
     let delete_result = collection.delete_one(filter).await;
 
     match delete_result {
-        Ok(_) => HttpResponse::Ok().json("payment deleted successfully"),
+        Ok(_) => HttpResponse::Ok().json(format!("Payment {} : deleted successfully", &payment_id)),
         Err(e) => {
             eprintln!("Failed to delete document: {}", e);
             HttpResponse::InternalServerError().json("Failed to delete payment")
@@ -96,8 +84,8 @@ pub async fn delete_payment(client: web::Data<Client>, path: web::Path<String>) 
 
 pub async fn find_payment(client: web::Data<Client>, path: web::Path<String>) -> impl Responder {
     let collection: Collection<Payment> = client.database("cucura-ccdb").collection("payments");
-    let id = path.into_inner();
-    let filter = doc! { "_id": ObjectId::parse_str(&id).unwrap() };
+    let payment_id = path.into_inner();
+    let filter = doc! { "payment_id": payment_id};
 
     match collection.find_one(filter).await {
         Ok(Some(payment)) => HttpResponse::Ok().json(payment),
