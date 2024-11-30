@@ -8,10 +8,11 @@ use crate::models;
 pub fn profile_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(web::resource("/profiles/register").route(web::post().to(register_profile)))
         .service(web::resource("/profiles/update").route(web::put().to(update_profile)))
-        .service(web::resource("/profiles/delete/{email}").route(web::delete().to(delete_profile)))
+        .service(
+            web::resource("/profiles/delete/{username}").route(web::delete().to(delete_profile)),
+        )
         .service(web::resource("/profiles").route(web::get().to(find_all_profiles)))
-        .service(web::resource("/profiles/{email}").route(web::get().to(find_profile)))
-        .service(web::resource("/profiles/find/{email}").route(web::get().to(find_profile)));
+        .service(web::resource("/profiles/{username}").route(web::get().to(find_profile)));
 }
 
 pub async fn register_profile(
@@ -45,7 +46,7 @@ pub async fn update_profile(
 ) -> impl Responder {
     let collection: Collection<Profile> = client.database("cucura-ccdb").collection("profiles");
     let new_profile = profile.into_inner();
-    let filter = doc! { "email": &new_profile.email };
+    let filter = doc! { "username": &new_profile.username };
 
     let update = doc! { "$set": { "username": &new_profile.username, "bio": &new_profile.bio } }; // Note: Password should be hashed before storing
 

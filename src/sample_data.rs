@@ -56,17 +56,35 @@ async fn main() -> std::io::Result<()> {
     }
 
     // Collect user IDs
-    let user_ids: Vec<Uuid> = sample_users.iter().map(|user| user.user_id).collect();
+    let user_ids: Vec<(Uuid, String, String)> = sample_users
+        .iter()
+        .map(|user| {
+            (
+                user.user_id.clone(),
+                user.email.clone(),
+                user.username.clone(),
+            )
+        })
+        .collect();
 
     // Load sample profiles
     let profile_collection = db.collection::<Profile>("profiles");
     let sample_profiles = user_ids
         .iter()
-        .map(|&user_id| Profile::new(user_id.clone(), Username().fake(), SafeEmail().fake()))
+        .map(|user_detail| {
+            Profile::new(
+                user_detail.0.clone(),
+                user_detail.1.clone(),
+                user_detail.2.clone(),
+            )
+        })
         .collect::<Vec<_>>();
     for profile in sample_profiles {
         profile_collection.insert_one(profile).await.unwrap();
     }
+
+    // Collect user IDs
+    let user_ids: Vec<Uuid> = sample_users.iter().map(|user| (user.user_id)).collect();
 
     // Load sample payments
     let payment_collection = db.collection::<Payment>("payments");
