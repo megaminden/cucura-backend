@@ -2,7 +2,6 @@
 use actix_web::{web, HttpResponse, Responder};
 use futures::StreamExt;
 use models::payment::Payment;
-use mongodb::bson::oid::ObjectId;
 use mongodb::{
     bson::{self, doc},
     Client, Collection,

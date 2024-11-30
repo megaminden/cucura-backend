@@ -13,7 +13,7 @@ use crate::models;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LoginRequest {
-    pub email: String,
+    pub username: String,
     pub password: String,
 }
 
@@ -35,7 +35,7 @@ pub async fn login_user(
     login_request: web::Json<LoginRequest>,
 ) -> impl Responder {
     let collection: Collection<User> = client.database("cucura-ccdb").collection("users");
-    let filter = doc! { "email": &login_request.email };
+    let filter = doc! { "username": &login_request.username };
 
     match collection.find_one(filter).await {
         Ok(Some(user)) => {

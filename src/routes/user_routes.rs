@@ -1,65 +1,69 @@
 use actix_web::{web, HttpResponse, Responder};
-use bcrypt::{hash, verify, DEFAULT_COST};
+use bcrypt::{hash, DEFAULT_COST};
 use futures::StreamExt;
 use models::user::User;
 use mongodb::{bson::doc, Client, Collection};
+use uuid::Uuid;
 
-use crate::models;
+use crate::models::{self, user::NewUser};
 
 pub fn user_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(web::resource("/users/register").route(web::post().to(register_user)))
         .service(web::resource("/users/update").route(web::put().to(update_user)))
-        .service(web::resource("/users/delete/{email}").route(web::delete().to(delete_user)))
+        .service(web::resource("/users/delete/{user_id}").route(web::delete().to(delete_user)))
         .service(web::resource("/users").route(web::get().to(find_all_users)))
-        .service(web::resource("/users/{username}").route(web::get().to(find_user)))
-        .service(web::resource("/users/find/{username}").route(web::get().to(find_user)));
+        .service(web::resource("/users/{username}").route(web::get().to(find_user)));
 }
 
-pub async fn register_user(client: web::Data<Client>, user: web::Json<User>) -> impl Responder {
-    println!();
+pub async fn register_user(
+    client: web::Data<Client>,
+    new_user: web::Json<NewUser>,
+) -> impl Responder {
     let collection: Collection<User> = client.database("cucura-ccdb").collection("users");
-    let hashed_password = hash(&user.password.clone(), DEFAULT_COST).unwrap();
-    let new_user = user.into_inner();
-    //check if user already exists
+    let mut new_user = new_user.into_inner();
+    let hashed_password = hash(&new_user.password, DEFAULT_COST).unwrap();
+    new_user.password = hashed_password;
+
+    // Check if user already exists
     let filter = doc! { "username": &new_user.username };
     let user_exists = collection.find_one(filter.clone()).await.unwrap();
     match user_exists {
-        Some(_) => return HttpResponse::Ok().json("Error 10001 : User already exists"),
-        None => (),
-    }
+        Some(_) => HttpResponse::Ok().json("Error: User already exists"),
+        None => {
+            let created_user = new_user.to_user();
+            collection.insert_one(&created_user).await.unwrap();
+            //also insert into the user profile collection
+            let profile_collection: Collection<models::profile::Profile> =
+                client.database("cucura-ccdb").collection("profiles");
+            let new_profile = models::profile::Profile::new(
+                created_user.user_id,
+                created_user.email.clone(),
+                created_user.username.clone(),
+            );
+            profile_collection.insert_one(&new_profile).await.unwrap();
 
-    let insert_result = collection.insert_one(&new_user).await;
-
-    match insert_result {
-        Ok(_) => {
-            let user_exists = collection.find_one(filter.clone()).await.unwrap().unwrap();
-            client
-                .database("cucura-ccdb")
-                .collection("profiles")
-                .insert_one(models::profile::Profile::new(
-                    user_exists.user_id.clone(),
-                    user_exists.email.clone(),
-                    user_exists.username.clone(), // Add the third argument here
-                ))
-                .await
-                .unwrap();
             HttpResponse::Ok().json("User registered successfully")
-        }
-        Err(e) => {
-            eprintln!("Failed to insert document: {}", e);
-            HttpResponse::InternalServerError().json("Failed to register user")
         }
     }
 }
 
 pub async fn update_user(client: web::Data<Client>, user: web::Json<User>) -> impl Responder {
     let collection: Collection<User> = client.database("cucura-ccdb").collection("users");
-    let filter = doc! { "username": &user.username };
-    let update = doc! { "$set": { "email": &user.email, "password": &user.password } }; // Note: Password should be hashed before storing
+    let hashed_password = hash(&user.password, DEFAULT_COST).unwrap();
+    let mut updated_user = user.into_inner();
+    updated_user.password = hashed_password;
 
-    let update_result = collection.update_one(filter, update).await;
+    let filter = doc! { "user_id": updated_user.user_id.to_string() };
+    let update = doc! {
+        "$set": {
+            "username": updated_user.username,
+            "email": updated_user.email,
+            "password": updated_user.password,
+            "user_type": updated_user.user_type,
+        }
+    };
 
-    match update_result {
+    match collection.update_one(filter, update).await {
         Ok(_) => HttpResponse::Ok().json("User updated successfully"),
         Err(e) => {
             eprintln!("Failed to update document: {}", e);
@@ -68,14 +72,11 @@ pub async fn update_user(client: web::Data<Client>, user: web::Json<User>) -> im
     }
 }
 
-pub async fn delete_user(client: web::Data<Client>, path: web::Path<String>) -> impl Responder {
+pub async fn delete_user(client: web::Data<Client>, path: web::Path<Uuid>) -> impl Responder {
     let collection: Collection<User> = client.database("cucura-ccdb").collection("users");
-    let email = path.into_inner();
-    let filter = doc! { "email": &email };
+    let filter = doc! { "user_id": path.into_inner().to_string() };
 
-    let delete_result = collection.delete_one(filter).await;
-
-    match delete_result {
+    match collection.delete_one(filter).await {
         Ok(_) => HttpResponse::Ok().json("User deleted successfully"),
         Err(e) => {
             eprintln!("Failed to delete document: {}", e);
@@ -83,10 +84,10 @@ pub async fn delete_user(client: web::Data<Client>, path: web::Path<String>) -> 
         }
     }
 }
+
 pub async fn find_user(client: web::Data<Client>, path: web::Path<String>) -> impl Responder {
     let collection: Collection<User> = client.database("cucura-ccdb").collection("users");
-    let username = path.into_inner();
-    let filter = doc! { "username": &username };
+    let filter = doc! { "username": path.into_inner() };
 
     match collection.find_one(filter).await {
         Ok(Some(user)) => HttpResponse::Ok().json(user),
@@ -98,15 +99,11 @@ pub async fn find_user(client: web::Data<Client>, path: web::Path<String>) -> im
     }
 }
 
-async fn find_all_users(client: web::Data<Client>) -> impl Responder {
+pub async fn find_all_users(client: web::Data<Client>) -> impl Responder {
     let collection: Collection<User> = client.database("cucura-ccdb").collection("users");
-    // Create a filter (empty filter to match all documents)
     let filter = doc! {};
 
-    // Find the documents in the collection matching the filter
     let mut cursor = collection.find(filter).await.unwrap();
-
-    // Collect the documents into a vector
     let mut users = Vec::new();
     while let Some(result) = cursor.next().await {
         match result {
@@ -115,6 +112,5 @@ async fn find_all_users(client: web::Data<Client>) -> impl Responder {
         }
     }
 
-    // Return the documents as a JSON response
     HttpResponse::Ok().json(users)
 }

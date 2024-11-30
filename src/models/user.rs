@@ -25,3 +25,30 @@ impl User {
         }
     }
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct NewUser {
+    pub username: String,
+    pub email: String,
+    pub password: String,
+    pub user_type: String,
+}
+impl NewUser {
+    pub fn new(username: String, email: String, password: String, user_type: String) -> NewUser {
+        NewUser {
+            username,
+            email,
+            password,
+            user_type,
+        }
+    }
+
+    pub fn to_user(&self) -> User {
+        User::new(
+            self.username.clone(),
+            self.email.clone(),
+            self.password.clone(),
+            self.user_type.clone(),
+        )
+    }
+}
