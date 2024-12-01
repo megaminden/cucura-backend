@@ -22,6 +22,7 @@ uuid = { version = "1.11.0", features = [
     "fast-rng",          # Use a faster (but still sufficiently random) RNG
     "macro-diagnostics", # Enable better diagnostics for compile-time UUIDs
 ] }
+bson = { version = "2.3.0", features = ["uuid-1"] }
 
 [[bin]]
 name = "sample_data"

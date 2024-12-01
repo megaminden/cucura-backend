@@ -1,11 +1,13 @@
 // routes/business_routes.rs
 use actix_web::{web, HttpResponse, Responder};
+use bson::serde_helpers::uuid_1_as_binary;
 use futures::StreamExt;
 use models::business::Business;
 use mongodb::{
-    bson::{self, doc, oid::ObjectId},
+    bson::{self, doc, oid::ObjectId, Bson},
     Client, Collection,
 };
+use uuid::Uuid;
 
 use crate::models;
 
@@ -14,7 +16,7 @@ pub fn business_routes(cfg: &mut web::ServiceConfig) {
         .service(web::resource("/businesses/update").route(web::put().to(update_business)))
         .service(web::resource("/businesses/delete/{id}").route(web::delete().to(delete_business)))
         .service(web::resource("/businesses").route(web::get().to(find_all_businesses)))
-        .service(web::resource("/businesses/{id}").route(web::get().to(find_business)))
+        .service(web::resource("/businesses/{business_id}").route(web::get().to(find_business)))
         .service(
             web::resource("/businesses/user/{user_id}")
                 .route(web::get().to(find_businesses_by_user_id)),
@@ -92,11 +94,16 @@ pub async fn delete_business(client: web::Data<Client>, path: web::Path<String>)
 pub async fn find_business(client: web::Data<Client>, path: web::Path<String>) -> impl Responder {
     let collection: Collection<Business> = client.database("cucura-ccdb").collection("businesses");
     let business_id = path.into_inner();
-    let filter = doc! { "business_id":business_id };
-
+    let business_id_result = Uuid::parse_str(&business_id);
+    let business_id_uuid: Uuid;
+    match business_id_result {
+        Ok(uuid) => business_id_uuid = uuid,
+        Err(_) => return HttpResponse::BadRequest().json("Invalid business ID format"),
+    };
+    let filter = doc! { "business_id": Bson::Binary(bson::Binary { subtype: bson::spec::BinarySubtype::UserDefined(0), bytes: business_id_uuid.as_bytes().to_vec() }) };
     match collection.find_one(filter).await {
         Ok(Some(business)) => HttpResponse::Ok().json(business),
-        Ok(None) => HttpResponse::NotFound().json("business not found"),
+        Ok(None) => HttpResponse::NotFound().json("Business not found"),
         Err(e) => {
             eprintln!("Failed to find document: {}", e);
             HttpResponse::InternalServerError().json("Failed to find business")
