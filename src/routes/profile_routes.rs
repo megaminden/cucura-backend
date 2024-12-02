@@ -1,7 +1,11 @@
 use actix_web::{web, HttpResponse, Responder};
 use futures::StreamExt;
 use models::profile::Profile;
-use mongodb::{bson::doc, Client, Collection};
+use mongodb::{
+    bson::{self, doc, oid::ObjectId, Bson},
+    Client, Collection,
+};
+use uuid::Uuid;
 
 use crate::models;
 
@@ -78,9 +82,15 @@ pub async fn delete_profile(client: web::Data<Client>, path: web::Path<String>) 
 }
 pub async fn find_profile(client: web::Data<Client>, path: web::Path<String>) -> impl Responder {
     let collection: Collection<Profile> = client.database("cucura-ccdb").collection("profiles");
-    let username = path.into_inner();
-    let filter = doc! { "username": &username };
-
+    let profile_id = path.into_inner();
+    let profile_uuid_result = Uuid::parse_str(&profile_id);
+    let profile_uuid: Uuid;
+    match profile_uuid_result {
+        Ok(uuid) => profile_uuid = uuid,
+        Err(_) => return HttpResponse::BadRequest().json("Invalid business ID format"),
+    };
+    let filter = doc! { "profile_id": Bson::Binary(bson::Binary {
+    subtype: bson::spec::BinarySubtype::UserDefined(0), bytes: profile_uuid.as_bytes().to_vec() }) };
     match collection.find_one(filter).await {
         Ok(Some(profile)) => HttpResponse::Ok().json(profile),
         Ok(None) => HttpResponse::NotFound().json("Profile not found"),
