@@ -64,7 +64,8 @@ pub async fn find_business(client: web::Data<Client>, path: web::Path<String>) -
         Ok(uuid) => business_id_uuid = uuid,
         Err(_) => return HttpResponse::BadRequest().json("Invalid business ID format"),
     };
-    let filter = doc! { "business_id": Bson::Binary(bson::Binary { subtype: bson::spec::BinarySubtype::UserDefined(0), bytes: business_id_uuid.as_bytes().to_vec() }) };
+    let filter = doc! { "business_id": Bson::Binary(bson::Binary {
+         subtype: bson::spec::BinarySubtype::UserDefined(0), bytes: business_id_uuid.as_bytes().to_vec() }) };
     match collection.find_one(filter).await {
         Ok(Some(business)) => HttpResponse::Ok().json(business),
         Ok(None) => HttpResponse::NotFound().json("Business not found"),

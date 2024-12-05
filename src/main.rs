@@ -14,10 +14,6 @@ use routes::{
 
 use std::env;
 
-async fn greet() -> impl Responder {
-    HttpResponse::Ok().body("Hello, world!")
-}
-
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     std::env::set_var("RUST_LOG", "debug");
@@ -53,7 +49,7 @@ async fn main() -> std::io::Result<()> {
             .configure(payment_routes::payment_routes)
             .configure(message_routes::message_routes)
             .configure(auth_routes::auth_routes)
-            .route("/", web::get().to(greet))
+      
     })
     .bind(("0.0.0.0", 5001))?
     .run()
